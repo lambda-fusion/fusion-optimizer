@@ -1,0 +1,12 @@
+service: optimizer
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+plugins:
+  - serverless-dotenv-plugin
+
+functions:
+  optimizer:
+    handler: handler.handler
