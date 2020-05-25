@@ -12,22 +12,28 @@ module.exports.handler = async (event) => {
 
   const mongoData = await readData(dbClient)
 
-  // console.log('saving current config and average time to db')
+  console.log('saving current config and average time to db')
 
-  // await saveCurrentConfigToDb(mongoData, fusionConfig, dbClient)
-
-  // const newConfig = splitDeployments(fusionConfig)
+  const averageDuration = await saveCurrentConfigToDb(
+    mongoData,
+    fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas })),
+    dbClient
+  )
 
   console.log('old config', fusionConfig)
 
-  const newConfig = permutateConfig(fusionConfig)
+  let newConfig
+
+  do {
+    newConfig = permutateConfig(fusionConfig)
+  } while (await configHasBeenTriedBefore(dbClient, newConfig, averageDuration))
 
   console.log('Saving new config', newConfig)
 
-  // await saveFusionConfig(newConfig)
-  // const data = await sendDispatchEvent()
+  await saveFusionConfig(newConfig)
+  const data = await sendDispatchEvent()
 
-  // console.log(data)
+  console.log(data)
 
   return {
     statusCode: 200,
@@ -39,6 +45,24 @@ module.exports.handler = async (event) => {
       2
     ),
   }
+}
+
+const configHasBeenTriedBefore = async (
+  dbClient,
+  fusionConfig,
+  averageDuration
+) => {
+  const collection = dbClient.db('fusion').collection('configurations')
+  const cleanedConfig = fusionConfig.map((deployment) => ({
+    lambdas: deployment.lambdas,
+  }))
+  const result = await collection.findOne({ fusionConfig: cleanedConfig })
+  console.log(result)
+  if (result && result.averageDuration > averageDuration) {
+    console.log('config has been tried before')
+    return true
+  }
+  return false
 }
 
 const readData = async (dbClient) => {
@@ -63,11 +87,12 @@ const saveCurrentConfigToDb = async (mongoData, fusionConfig, dbClient) => {
     mongoData.length
 
   const collection = dbClient.db('fusion').collection('configurations')
-  return collection.insertOne({
+  await collection.insertOne({
     fusionConfig,
     averageDuration,
     date: new Date(),
   })
+  return averageDuration
 }
 
 const loadPrevConfig = async (dbClient) => {
