@@ -3,6 +3,17 @@ service: optimizer
 provider:
   name: aws
   runtime: nodejs12.x
+  region: eu-central-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - 'lambda:InvokeFunction'
+        - 'lambda:InvokeAsync'
+      Resource: '*'
+    - Effect: Allow
+      Action:
+        - 's3:*'
+      Resource: '*'
 
 plugins:
   - serverless-dotenv-plugin
@@ -10,3 +21,7 @@ plugins:
 functions:
   optimizer:
     handler: handler.handler
+    events:
+      - schedule:
+          rate: rate(1 hour)
+          enabled: true

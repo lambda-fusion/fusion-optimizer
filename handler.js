@@ -2,6 +2,7 @@
 const { Octokit } = require('@octokit/rest')
 const { MongoClient } = require('mongodb')
 const AWS = require('aws-sdk')
+const fetch = require('node-fetch')
 
 module.exports.handler = async (event) => {
   const dbClient = await initMongoClient()
@@ -16,14 +17,12 @@ module.exports.handler = async (event) => {
 
   const averageDuration = await saveCurrentConfigToDb(
     mongoData,
-    fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas })),
+    fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
     dbClient
   )
-
   console.log('old config', fusionConfig)
 
   let newConfig
-
   do {
     newConfig = permutateConfig(fusionConfig)
   } while (await configHasBeenTriedBefore(dbClient, newConfig, averageDuration))
@@ -53,13 +52,14 @@ const configHasBeenTriedBefore = async (
   averageDuration
 ) => {
   const collection = dbClient.db('fusion').collection('configurations')
-  const cleanedConfig = fusionConfig.map((deployment) => ({
-    lambdas: deployment.lambdas,
-  }))
+  const cleanedConfig = fusionConfig
+    .map((deployment) => deployment.lambdas.sort())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+  console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
-  console.log(result)
-  if (result && result.averageDuration > averageDuration) {
-    console.log('config has been tried before')
+  console.log('found', result)
+  if (result && result.averageDuration >= averageDuration) {
+    console.log('config has been tried before', result)
     return true
   }
   return false
@@ -81,10 +81,15 @@ const sendDispatchEvent = async () => {
   })
 }
 
-const saveCurrentConfigToDb = async (mongoData, fusionConfig, dbClient) => {
+const saveCurrentConfigToDb = async (mongoData, inputConfig, dbClient) => {
   const averageDuration =
     mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
     mongoData.length
+
+  const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
+  const fusionConfig = fusionConfigCopy
+    .map((entry) => entry.lambdas)
+    .sort((a, b) => a[0].localeCompare(b[0]))
 
   const collection = dbClient.db('fusion').collection('configurations')
   await collection.insertOne({
@@ -117,10 +122,6 @@ const permutateConfig = (fusionConfig) => {
     (config) => config.lambdas.length > 1
   )
   const deploymentCount = fusionConfig.length
-  const functionCount = fusionConfig.reduce(
-    (prev, curr) => prev + curr.lambdas.length,
-    0
-  )
   if (deploymentCount > 1 && splittingCandidates.length > 0) {
     const rand = getRandomInt(2)
     if (rand === 0) {
