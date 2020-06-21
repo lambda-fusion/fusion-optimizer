@@ -53,7 +53,7 @@ const configHasBeenTriedBefore = async (
 ) => {
   const collection = dbClient.db('fusion').collection('configurations')
   const cleanedConfig = fusionConfig
-    .map((deployment) => deployment.lambdas.sort())
+    .map((deployment) => deployment.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
@@ -88,7 +88,7 @@ const saveCurrentConfigToDb = async (mongoData, inputConfig, dbClient) => {
 
   const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
   const fusionConfig = fusionConfigCopy
-    .map((entry) => entry.lambdas)
+    .map((entry) => entry.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
 
   const collection = dbClient.db('fusion').collection('configurations')
