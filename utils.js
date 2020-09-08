@@ -1,4 +1,6 @@
 const AWS = require('aws-sdk')
+const { MongoClient } = require('mongodb')
+const { Octokit } = require('@octokit/rest')
 
 const splitDeployments = (fusionConfig) => {
   const index = getSplitIndex(fusionConfig)
@@ -73,10 +75,105 @@ const saveFusionConfig = async (fusionConfig) => {
   console.log(`Successfully uploaded to ${location}/${key}`)
 }
 
+const configHasBeenTriedBefore = async (
+  dbClient,
+  fusionConfig,
+  averageDuration
+) => {
+  const collection = dbClient.db('fusion').collection('configurations')
+  const cleanedConfig = fusionConfig
+    .map((deployment) => deployment.lambdas.sort((a, b) => a.localeCompare(b)))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+  console.log('cleaned config', cleanedConfig)
+  const result = await collection.findOne({ fusionConfig: cleanedConfig })
+  console.log('found', result)
+  if (result && result.averageDuration >= averageDuration) {
+    console.log('config has been tried before', result)
+    return true
+  }
+  return false
+}
+
+const readData = async (dbClient) => {
+  const collection = dbClient.db('fusion').collection('results')
+  return collection.find().limit(5).sort({ starttime: -1 }).toArray()
+}
+
+const sendDispatchEvent = async () => {
+  const octokit = new Octokit({
+    auth: process.env.GITHUB_TOKEN,
+  })
+  return octokit.repos.createDispatchEvent({
+    owner: process.env.REPO_OWNER,
+    repo: process.env.REPO_NAME,
+    event_type: 'deploy',
+  })
+}
+
+const initMongoClient = async () => {
+  const dbUser = process.env.DB_USER
+  const dbPassword = process.env.DB_PW
+  const dbUrl = process.env.DB_URL
+
+  const uri = `mongodb+srv://${dbUser}:${dbPassword}@${dbUrl}`
+  const dbClient = new MongoClient(uri, {})
+  return dbClient.connect()
+}
+
+const saveCurrentConfigToDb = async (mongoData, inputConfig, dbClient) => {
+  const averageDuration =
+    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
+    mongoData.length
+
+  const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
+  const fusionConfig = fusionConfigCopy
+    .map((entry) => entry.lambdas.sort((a, b) => a.localeCompare(b)))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+
+  const collection = dbClient.db('fusion').collection('configurations')
+  await collection.insertOne({
+    fusionConfig,
+    averageDuration,
+    date: new Date(),
+  })
+  return averageDuration
+}
+
+const permutateConfig = (fusionConfig) => {
+  let fusionConfigCopy = JSON.parse(JSON.stringify(fusionConfig))
+  const splittingCandidates = fusionConfigCopy.filter(
+    (config) => config.lambdas.length > 1
+  )
+  const deploymentCount = fusionConfig.length
+  if (deploymentCount > 1 && splittingCandidates.length > 0) {
+    const rand = getRandomInt(2)
+    if (rand === 0) {
+      mergeDeployments(fusionConfigCopy)
+    } else {
+      splitDeployments(fusionConfigCopy)
+    }
+  } else if (deploymentCount === 1) {
+    console.log('only 1 deployment detected')
+    splitDeployments(fusionConfigCopy)
+  } else {
+    console.log('no splittable deployments found')
+    mergeDeployments(fusionConfigCopy)
+  }
+  normalizeEntries(fusionConfigCopy)
+
+  return fusionConfigCopy
+}
+
 module.exports = {
   splitDeployments,
   normalizeEntries,
   saveFusionConfig,
   mergeDeployments,
   getRandomInt,
+  configHasBeenTriedBefore,
+  readData,
+  sendDispatchEvent,
+  initMongoClient,
+  saveCurrentConfigToDb,
+  permutateConfig,
 }
