@@ -2,8 +2,8 @@ const AWS = require('aws-sdk')
 const { MongoClient } = require('mongodb')
 const { Octokit } = require('@octokit/rest')
 
-const splitDeployments = (fusionConfig) => {
-  const index = getSplitIndex(fusionConfig)
+const splitDeploymentsRandomly = (fusionConfig) => {
+  const index = getRandomSplitIndex(fusionConfig)
   const splittee = fusionConfig[index]
 
   const indexToExtract = getRandomInt(splittee.lambdas.length)
@@ -16,7 +16,7 @@ const splitDeployments = (fusionConfig) => {
   return fusionConfig
 }
 
-const getSplitIndex = (fusionConfig) => {
+const getRandomSplitIndex = (fusionConfig) => {
   let index = getRandomInt(fusionConfig.length)
   while (fusionConfig[index].lambdas.length < 2) {
     index = getRandomInt(fusionConfig.length)
@@ -24,7 +24,7 @@ const getSplitIndex = (fusionConfig) => {
   return index
 }
 
-const mergeDeployments = (fusionConfig) => {
+const mergeDeploymentsRandomly = (fusionConfig) => {
   console.log('Merging')
   const deploymentCount = fusionConfig.length
   const rand1 = getRandomInt(deploymentCount)
@@ -139,7 +139,7 @@ const saveCurrentConfigToDb = async (mongoData, inputConfig, dbClient) => {
   return averageDuration
 }
 
-const permutateConfig = (fusionConfig) => {
+const permutateConfigRandomly = (fusionConfig) => {
   let fusionConfigCopy = JSON.parse(JSON.stringify(fusionConfig))
   const splittingCandidates = fusionConfigCopy.filter(
     (config) => config.lambdas.length > 1
@@ -148,16 +148,16 @@ const permutateConfig = (fusionConfig) => {
   if (deploymentCount > 1 && splittingCandidates.length > 0) {
     const rand = getRandomInt(2)
     if (rand === 0) {
-      mergeDeployments(fusionConfigCopy)
+      mergeDeploymentsRandomly(fusionConfigCopy)
     } else {
-      splitDeployments(fusionConfigCopy)
+      splitDeploymentsRandomly(fusionConfigCopy)
     }
   } else if (deploymentCount === 1) {
     console.log('only 1 deployment detected')
-    splitDeployments(fusionConfigCopy)
+    splitDeploymentsRandomly(fusionConfigCopy)
   } else {
     console.log('no splittable deployments found')
-    mergeDeployments(fusionConfigCopy)
+    mergeDeploymentsRandomly(fusionConfigCopy)
   }
   normalizeEntries(fusionConfigCopy)
 
@@ -165,15 +165,15 @@ const permutateConfig = (fusionConfig) => {
 }
 
 module.exports = {
-  splitDeployments,
+  splitDeploymentsRandomly,
   normalizeEntries,
   saveFusionConfig,
-  mergeDeployments,
+  mergeDeploymentsRandomly,
   getRandomInt,
   configHasBeenTriedBefore,
   readData,
   sendDispatchEvent,
   initMongoClient,
   saveCurrentConfigToDb,
-  permutateConfig,
+  permutateConfigRandomly,
 }

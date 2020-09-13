@@ -22,17 +22,17 @@ module.exports.handler = async () => {
 
   let newConfig
   do {
-    newConfig = utils.permutateConfig(fusionConfig)
+    newConfig = utils.permutateConfigRandomly(fusionConfig)
   } while (
     await utils.configHasBeenTriedBefore(dbClient, newConfig, averageDuration)
   )
 
   console.log('Saving new config', newConfig)
 
-  await utils.saveFusionConfig(newConfig)
-  const data = await utils.sendDispatchEvent()
+  // await utils.saveFusionConfig(newConfig)
+  // const data = await utils.sendDispatchEvent()
 
-  console.log(data)
+  // console.log(data)
 
   return {
     statusCode: 200,

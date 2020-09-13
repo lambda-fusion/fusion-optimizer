@@ -25,17 +25,19 @@ module.exports.handler = async (event) => {
   )
   console.log('old config', fusionConfig)
 
-  let newConfig
-  do {
-    newConfig = utils.permutateConfig(fusionConfig)
-  } while (
-    (await utils.configHasBeenTriedBefore(
-      dbClient,
-      newConfig,
-      averageDuration
-    )) ||
-    !isValidConfig(fusionConfig, dag)
-  )
+  // let newConfig
+  // do {
+  //   newConfig = createNewConfig(fusionConfig, dag)
+  // } while (
+  //   (await utils.configHasBeenTriedBefore(
+  //     dbClient,
+  //     newConfig,
+  //     averageDuration
+  //   )) ||
+  //   !isValidConfig(fusionConfig, dag)
+  // )
+  const newConfig = createNewConfig(fusionConfig, dag)
+  console.log(newConfig)
 
   console.log('Saving new config', newConfig)
 
@@ -67,7 +69,6 @@ const isValidConfig = (fusionConfig, dag) => {
     return config.lambdas.every((lambda1) => {
       for (const lambda2 of config.lambdas) {
         if (lambda1 === lambda2) continue
-        console.log(lambda1, lambda2)
         const isDescendant = !!DFS(lambda1, lambda2, dag)
         if (isDescendant) {
           const parents = getParents(lambda2, dag)
@@ -95,20 +96,20 @@ const getParents = (child, dag) => {
   return parents
 }
 
-const DFS = (node, goal, dag, stack) => {
+const DFS = (source, target, dag, stack) => {
   if (!stack) {
     stack = []
   }
-  if (node === goal) {
-    return node
+  if (source === target) {
+    return source
   } else {
-    if (!dag[node]) {
+    if (!dag[source]) {
       return undefined
     }
-    stack = stack.concat(dag[node])
+    stack = stack.concat(dag[source])
     while (stack.length > 0) {
       const newNode = stack.pop()
-      return DFS(newNode, goal, dag, stack)
+      return DFS(newNode, target, dag, stack)
     }
   }
 }
@@ -132,6 +133,34 @@ const loadDAG = async () => {
 
   const dag = JSON.parse(Buffer.from(content, 'base64').toString())
   return dag
+}
+
+//merge direct descendants
+const createNewConfig = (fusionConfig, dag) => {
+  for (const i in fusionConfig) {
+    for (const j in fusionConfig) {
+      if (i === j) {
+        continue
+      }
+      const lambda1 = fusionConfig[i].lambdas[0]
+      const lambda2 = fusionConfig[j].lambdas[0]
+
+      const isRelated =
+        !!DFS(lambda1, lambda2, dag) || !!DFS(lambda2, lambda1, dag)
+
+      if (!isRelated) {
+        continue
+      }
+
+      fusionConfig[i].lambdas = fusionConfig[i].lambdas.concat(
+        fusionConfig[j].lambdas
+      )
+      fusionConfig.splice(j, 1)
+    }
+    return utils.normalizeEntries(fusionConfig)
+  }
+
+  throw new Error('No suitable config could be created')
 }
 
 const loadPrevConfig = async (dbClient) => {
