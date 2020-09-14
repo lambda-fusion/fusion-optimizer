@@ -1,6 +1,7 @@
 'use strict'
 const { Octokit } = require('@octokit/rest')
 const fetch = require('node-fetch')
+const { getRandomInt } = require('./utils')
 const utils = require('./utils')
 
 module.exports.handler = async (event) => {
@@ -25,19 +26,12 @@ module.exports.handler = async (event) => {
   )
   console.log('old config', fusionConfig)
 
-  // let newConfig
-  // do {
-  //   newConfig = createNewConfig(fusionConfig, dag)
-  // } while (
-  //   (await utils.configHasBeenTriedBefore(
-  //     dbClient,
-  //     newConfig,
-  //     averageDuration
-  //   )) ||
-  //   !isValidConfig(fusionConfig, dag)
-  // )
-  const newConfig = createNewConfig(fusionConfig, dag)
-  console.log(newConfig)
+  const newConfig = createNewConfig(
+    fusionConfig,
+    dag,
+    dbClient,
+    averageDuration
+  )
 
   console.log('Saving new config', newConfig)
 
@@ -135,13 +129,66 @@ const loadDAG = async () => {
   return dag
 }
 
+const createNewConfig = (fusionConfig, dag, dbClient, averageDuration) => {
+  const randomIndex = getRandomInt(2)
+  if (randomIndex === 0) {
+    return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
+  } else {
+    return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
+  }
+}
+
+const splitLambdas = (fusionConfig, dag) => {
+  console.log('SPLITTING')
+  for (const config of fusionConfig) {
+    if (config.lambdas.length <= 1) {
+      continue
+    }
+
+    for (const i in config.lambdas) {
+      for (const j in config.lambdas) {
+        const fusionConfigCopy = utils.copyObject(fusionConfig)
+
+        const lambda1 = config.lambdas[i]
+        const lambda2 = config.lambdas[j]
+
+        const isRelated =
+          !!DFS(lambda1, lambda2, dag) || !!DFS(lambda2, lambda1, dag)
+
+        if (isRelated) {
+          console.log(`${lambda1} and ${lambda2} are related. Skip.`)
+          continue
+        }
+
+        const indexToExtract = utils.getRandomInt(config.lambdas.length)
+        const functionName = splittee.lambdas[indexToExtract]
+        fusionConfigCopy.push({ lambdas: [functionName] })
+        splittee.lambdas.splice(indexToExtract, 1)
+        if (
+          utils.configHasBeenTriedBefore(
+            dbClient,
+            fusionConfigCopy,
+            averageDuration
+          )
+        ) {
+          continue
+        }
+        return fusionConfigCopy
+      }
+    }
+  }
+  throw new Error('No suitable config could be created')
+}
+
 //merge direct descendants
-const createNewConfig = (fusionConfig, dag) => {
+const mergeLambdas = (fusionConfig, dag, dbClient, averageDuration) => {
+  console.log('MERGING')
   for (const i in fusionConfig) {
     for (const j in fusionConfig) {
       if (i === j) {
         continue
       }
+      const fusionConfigCopy = utils.copyObject(fusionConfig)
       const lambda1 = fusionConfig[i].lambdas[0]
       const lambda2 = fusionConfig[j].lambdas[0]
 
@@ -149,17 +196,25 @@ const createNewConfig = (fusionConfig, dag) => {
         !!DFS(lambda1, lambda2, dag) || !!DFS(lambda2, lambda1, dag)
 
       if (!isRelated) {
+        console.log(`${lambda1} and ${lambda2} are not related. Skip.`)
         continue
       }
 
-      fusionConfig[i].lambdas = fusionConfig[i].lambdas.concat(
+      fusionConfigCopy[i].lambdas = fusionConfig[i].lambdas.concat(
         fusionConfig[j].lambdas
       )
-      fusionConfig.splice(j, 1)
-    }
-    return utils.normalizeEntries(fusionConfig)
-  }
+      fusionConfigCopy[i].lambdas.splice(j, 1)
 
+      const normalized = utils.normalizeEntries(fusionConfigCopy)
+
+      if (
+        utils.configHasBeenTriedBefore(dbClient, normalized, averageDuration)
+      ) {
+        continue
+      }
+      return normalized
+    }
+  }
   throw new Error('No suitable config could be created')
 }
 

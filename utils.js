@@ -164,6 +164,8 @@ const permutateConfigRandomly = (fusionConfig) => {
   return fusionConfigCopy
 }
 
+const copyObject = (o) => JSON.parse(JSON.stringify(o))
+
 module.exports = {
   splitDeploymentsRandomly,
   normalizeEntries,
@@ -176,4 +178,5 @@ module.exports = {
   initMongoClient,
   saveCurrentConfigToDb,
   permutateConfigRandomly,
+  copyObject,
 }
