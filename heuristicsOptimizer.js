@@ -132,9 +132,19 @@ const loadDAG = async () => {
 const createNewConfig = (fusionConfig, dag, dbClient, averageDuration) => {
   const randomIndex = getRandomInt(2)
   if (randomIndex === 0) {
-    return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
+    try {
+      return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
+    } catch (err) {
+      console.log('Merging failed, trying splitting', err)
+      return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
+    }
   } else {
-    return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
+    try {
+      return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
+    } catch (err) {
+      console.log('Splitting failed, trying splitting', err)
+      return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
+    }
   }
 }
 
