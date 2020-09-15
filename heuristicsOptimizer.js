@@ -26,7 +26,7 @@ module.exports.handler = async (event) => {
   )
   console.log('old config', fusionConfig)
 
-  const newConfig = createNewConfig(
+  const newConfig = await createNewConfig(
     fusionConfig,
     dag,
     dbClient,
@@ -138,7 +138,7 @@ const createNewConfig = (fusionConfig, dag, dbClient, averageDuration) => {
   }
 }
 
-const splitLambdas = (fusionConfig, dag) => {
+const splitLambdas = async (fusionConfig, dag) => {
   console.log('SPLITTING')
   for (const config of fusionConfig) {
     if (config.lambdas.length <= 1) {
@@ -165,7 +165,7 @@ const splitLambdas = (fusionConfig, dag) => {
         fusionConfigCopy.push({ lambdas: [functionName] })
         splittee.lambdas.splice(indexToExtract, 1)
         if (
-          utils.configHasBeenTriedBefore(
+          await utils.configHasBeenTriedBefore(
             dbClient,
             fusionConfigCopy,
             averageDuration
@@ -181,7 +181,7 @@ const splitLambdas = (fusionConfig, dag) => {
 }
 
 //merge direct descendants
-const mergeLambdas = (fusionConfig, dag, dbClient, averageDuration) => {
+const mergeLambdas = async (fusionConfig, dag, dbClient, averageDuration) => {
   console.log('MERGING')
   for (const i in fusionConfig) {
     for (const j in fusionConfig) {
@@ -200,15 +200,19 @@ const mergeLambdas = (fusionConfig, dag, dbClient, averageDuration) => {
         continue
       }
 
-      fusionConfigCopy[i].lambdas = fusionConfig[i].lambdas.concat(
-        fusionConfig[j].lambdas
+      fusionConfigCopy[i].lambdas = fusionConfigCopy[i].lambdas.concat(
+        fusionConfigCopy[j].lambdas
       )
-      fusionConfigCopy[i].lambdas.splice(j, 1)
+      fusionConfigCopy.splice(j, 1)
 
       const normalized = utils.normalizeEntries(fusionConfigCopy)
 
       if (
-        utils.configHasBeenTriedBefore(dbClient, normalized, averageDuration)
+        await utils.configHasBeenTriedBefore(
+          dbClient,
+          normalized,
+          averageDuration
+        )
       ) {
         continue
       }
