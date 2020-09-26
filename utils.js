@@ -37,7 +37,7 @@ const mergeDeploymentsRandomly = (fusionConfig) => {
 
 const normalizeEntries = (fusionConfig) => {
   for (const index in fusionConfig) {
-    fusionConfig[index].entry = `"handler${index}-stg"`
+    fusionConfig[index].entry = `handler${index}-stg`
   }
   return fusionConfig
 }
