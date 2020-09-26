@@ -37,7 +37,7 @@ const mergeDeploymentsRandomly = (fusionConfig) => {
 
 const normalizeEntries = (fusionConfig) => {
   for (const index in fusionConfig) {
-    fusionConfig[index].entry = `handler${index}`
+    fusionConfig[index].entry = `"handler${index}-stg"`
   }
   return fusionConfig
 }
@@ -98,14 +98,14 @@ const readData = async (dbClient) => {
   return collection.find().limit(5).sort({ starttime: -1 }).toArray()
 }
 
-const sendDispatchEvent = async () => {
+const sendDispatchEvent = async (eventType) => {
   const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
   })
   return octokit.repos.createDispatchEvent({
     owner: process.env.REPO_OWNER,
     repo: process.env.REPO_NAME,
-    event_type: 'deploy',
+    event_type: eventType,
   })
 }
 
