@@ -37,7 +37,7 @@ const mergeDeploymentsRandomly = (fusionConfig) => {
 
 const normalizeEntries = (fusionConfig) => {
   for (const index in fusionConfig) {
-    fusionConfig[index].entry = `handler${index}-stg`
+    fusionConfig[index].entry = `handler${index}`
   }
   return fusionConfig
 }
@@ -86,7 +86,7 @@ const configHasBeenTriedBefore = async (
     .sort((a, b) => a[0].localeCompare(b[0]))
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
-  if (result && result.averageDuration > averageDuration) {
+  if (result && result.averageDuration < averageDuration) {
     console.log('config has been tried before', result)
     return true
   }

@@ -19,12 +19,19 @@ module.exports.handler = async (event) => {
 
   console.log('saving current config and average time to db')
 
+  const oldConfig = await loadPrevConfig(dbClient)
+
   const averageDuration = await utils.saveCurrentConfigToDb(
     mongoData,
     fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
     dbClient
   )
-  console.log('old config', fusionConfig)
+
+  if (oldConfig && averageDuration < oldConfig.averageDuration) {
+    console.log('deploying to prod')
+    await utils.sendDispatchEvent('deploy')
+  }
+  console.log('current config', fusionConfig)
 
   const newConfig = await createNewConfig(
     fusionConfig,
@@ -132,19 +139,9 @@ const loadDAG = async () => {
 const createNewConfig = (fusionConfig, dag, dbClient, averageDuration) => {
   const randomIndex = getRandomInt(2)
   if (randomIndex === 0) {
-    try {
-      return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
-    } catch (err) {
-      console.log('Merging failed, trying splitting', err)
-      return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
-    }
+    return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
   } else {
-    try {
-      return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
-    } catch (err) {
-      console.log('Splitting failed, trying splitting', err)
-      return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
-    }
+    return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
   }
 }
 
