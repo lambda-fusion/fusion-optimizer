@@ -86,6 +86,8 @@ const configHasBeenTriedBefore = async (
     .sort((a, b) => a[0].localeCompare(b[0]))
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
+  console.log('average durations', result.averageDuration, averageDuration)
+
   if (result && result.averageDuration < averageDuration) {
     console.log('config has been tried before', result)
     return true
