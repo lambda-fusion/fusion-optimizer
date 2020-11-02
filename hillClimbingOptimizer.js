@@ -30,7 +30,7 @@ module.exports.handler = async () => {
   console.log('Saving new config', newConfig)
 
   await utils.saveFusionConfig(newConfig)
-  const data = await utils.sendDispatchEvent()
+  const data = await utils.sendDispatchEvent('deploy-stg')
 
   console.log(data)
 
