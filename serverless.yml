@@ -20,15 +20,15 @@ plugins:
   - serverless-dotenv-plugin
 
 functions:
-  randomOptimizer:
-    handler: randomOptimizer.handler
+  hillClimbingOptimizer:
+    handler: hillClimbingOptimizer.handler
     events:
       - schedule:
           rate: rate(1 hour)
-          enabled: false
+          enabled: true
   heuristicsOptimizer:
     handler: heuristicsOptimizer.handler
     events:
       - schedule:
           rate: rate(30 minutes)
-          enabled: true
+          enabled: false
