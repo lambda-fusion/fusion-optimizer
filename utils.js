@@ -87,27 +87,25 @@ const configHasBeenTriedBefore = async (
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
 
-  if (result.error) {
-    console.log('This configuration had an error', result)
-    return true
-  }
+  if (result) {
+    if (result.error) {
+      console.log('This configuration had an error', result)
+      return true
+    }
 
-  console.log(
-    'average durations',
-    result && result.averageDuration,
-    averageDuration
-  )
-
-  if (result && result.averageDuration > averageDuration) {
-    console.log('config has been tried before', result)
-    return true
+    if (result.averageDuration > averageDuration) {
+      console.log('config has been tried before', result)
+      return true
+    }
   }
   return false
 }
 
 const readData = async (dbClient) => {
   const collection = dbClient.db('fusion').collection('results')
-  return collection.find().limit(5).sort({ starttime: -1 }).toArray()
+
+  const last25Minutes = new Date(Date.now() - 1000 * 60 * 25)
+  return collection.find({ starttime: { $gte: last25Minutes } }).toArray()
 }
 
 const sendDispatchEvent = async (eventType, stage) => {

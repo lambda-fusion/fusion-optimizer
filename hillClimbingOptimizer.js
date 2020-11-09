@@ -10,6 +10,7 @@ module.exports.handler = async () => {
   const fusionConfig = await response.json()
 
   const mongoData = await utils.readData(dbClient)
+  console.log(mongoData)
   const oldConfig = await loadPrevConfig(dbClient)
 
   const averageDuration = await utils.saveCurrentConfigToDbAndReturnAverageDuration(
@@ -27,6 +28,7 @@ module.exports.handler = async () => {
     await utils.sendDispatchEvent('deploy', 'prod')
   }
 
+  console.log('old config', fusionConfig)
   let newConfig
   do {
     newConfig = utils.permutateConfigRandomly(fusionConfig)
