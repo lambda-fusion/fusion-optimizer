@@ -24,7 +24,7 @@ module.exports.handler = async () => {
     averageDuration < oldConfig.averageDuration
   ) {
     console.log('deploying to prod')
-    await utils.sendDispatchEvent('deploy')
+    await utils.sendDispatchEvent('deploy', 'prod')
   }
 
   let newConfig
@@ -37,7 +37,7 @@ module.exports.handler = async () => {
   console.log('Saving new config', newConfig)
 
   await utils.saveFusionConfig(newConfig)
-  const data = await utils.sendDispatchEvent('deploy-stg')
+  const data = await utils.sendDispatchEvent('deploy', 'stg')
 
   console.log(data)
 

@@ -110,7 +110,7 @@ const readData = async (dbClient) => {
   return collection.find().limit(5).sort({ starttime: -1 }).toArray()
 }
 
-const sendDispatchEvent = async (eventType) => {
+const sendDispatchEvent = async (eventType, stage) => {
   const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
   })
@@ -118,6 +118,9 @@ const sendDispatchEvent = async (eventType) => {
     owner: process.env.REPO_OWNER,
     repo: process.env.REPO_NAME,
     event_type: eventType,
+    client_payload: {
+      stage,
+    },
   })
 }
 
