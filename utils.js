@@ -86,6 +86,12 @@ const configHasBeenTriedBefore = async (
     .sort((a, b) => a[0].localeCompare(b[0]))
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
+
+  if (result.error) {
+    console.log('This configuration had an error', result)
+    return true
+  }
+
   console.log(
     'average durations',
     result && result.averageDuration,
@@ -125,17 +131,34 @@ const initMongoClient = async () => {
   return dbClient.connect()
 }
 
-const saveCurrentConfigToDb = async (mongoData, inputConfig, dbClient) => {
-  const averageDuration =
-    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
-    mongoData.length
+const saveCurrentConfigToDbAndReturnAverageDuration = async (
+  mongoData,
+  inputConfig,
+  dbClient
+) => {
+  console.log('saving current config and average time to db')
 
+  // sort fusion config entries
   const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
   const fusionConfig = fusionConfigCopy
     .map((entry) => entry.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
 
   const collection = dbClient.db('fusion').collection('configurations')
+
+  if (mongoData.find((entry) => !!entry.error)) {
+    console.log('Execution failed at least once, discarding this configuration')
+    await collection.insertOne({
+      fusionConfig,
+      error: true,
+      date: new Date(),
+    })
+    return
+  }
+  const averageDuration =
+    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
+    mongoData.length
+
   await collection.insertOne({
     fusionConfig,
     averageDuration,
@@ -181,7 +204,7 @@ module.exports = {
   readData,
   sendDispatchEvent,
   initMongoClient,
-  saveCurrentConfigToDb,
+  saveCurrentConfigToDbAndReturnAverageDuration,
   permutateConfigRandomly,
   copyObject,
 }

@@ -17,17 +17,19 @@ module.exports.handler = async (event) => {
 
   console.log('DAG loaded', dag)
 
-  console.log('saving current config and average time to db')
-
   const oldConfig = await loadPrevConfig(dbClient)
 
-  const averageDuration = await utils.saveCurrentConfigToDb(
+  const averageDuration = await utils.saveCurrentConfigToDbAndReturnAverageDuration(
     mongoData,
     fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
     dbClient
   )
 
-  if (oldConfig && averageDuration < oldConfig.averageDuration) {
+  if (
+    oldConfig &&
+    !oldConfig.error &&
+    averageDuration < oldConfig.averageDuration
+  ) {
     console.log('deploying to prod')
     await utils.sendDispatchEvent('deploy')
   }
@@ -61,7 +63,7 @@ module.exports.handler = async (event) => {
 
 // deployment is valid if either only has 1 lambda OR
 // lambdas have no connection OR
-// if includes descendant, then also includes at least 1 parent
+// if includes related functions, then includes all functions inbetween
 const isValidConfig = (fusionConfig, dag) => {
   return fusionConfig.every((config) => {
     if (config.lambdas.length === 1) {
@@ -187,7 +189,7 @@ const splitLambdas = async (fusionConfig, dag) => {
   throw new Error('No suitable config could be created')
 }
 
-//merge direct descendants
+//merge direct dddescendants
 const mergeLambdas = async (fusionConfig, dag, dbClient, averageDuration) => {
   console.log('MERGING')
   for (const i in fusionConfig) {

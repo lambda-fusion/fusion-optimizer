@@ -10,15 +10,22 @@ module.exports.handler = async () => {
   const fusionConfig = await response.json()
 
   const mongoData = await utils.readData(dbClient)
+  const oldConfig = await loadPrevConfig(dbClient)
 
-  console.log('saving current config and average time to db')
-
-  const averageDuration = await utils.saveCurrentConfigToDb(
+  const averageDuration = await utils.saveCurrentConfigToDbAndReturnAverageDuration(
     mongoData,
     fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
     dbClient
   )
-  console.log('old config', fusionConfig)
+
+  if (
+    oldConfig &&
+    !oldConfig.error &&
+    averageDuration < oldConfig.averageDuration
+  ) {
+    console.log('deploying to prod')
+    await utils.sendDispatchEvent('deploy')
+  }
 
   let newConfig
   do {
