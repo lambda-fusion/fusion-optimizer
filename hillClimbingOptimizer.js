@@ -10,31 +10,44 @@ module.exports.handler = async () => {
   const fusionConfig = await response.json()
 
   const mongoData = await utils.readData(dbClient)
-  console.log(mongoData)
-  const oldConfig = await loadPrevConfig(dbClient)
+  const prevConfig = (await loadPrevConfig(dbClient)) || {}
 
-  const averageDuration = await utils.saveCurrentConfigToDbAndReturnAverageDuration(
-    mongoData,
+  const hasErrors = utils.configHadErrors(mongoData)
+
+  const averageDuration = hasErrors
+    ? Number.MAX_SAFE_INTEGER
+    : await utils.calculateAverageDuration(mongoData)
+
+  await utils.saveCurrentConfigToDb(
     fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
-    dbClient
+    dbClient,
+    hasErrors,
+    averageDuration,
+    prevConfig.originalConfig
   )
 
   if (
-    oldConfig &&
-    !oldConfig.error &&
-    averageDuration < oldConfig.averageDuration
+    prevConfig &&
+    !prevConfig.error &&
+    averageDuration < prevConfig.averageDuration
   ) {
     console.log('deploying to prod')
     await utils.sendDispatchEvent('deploy', 'prod')
   }
 
-  console.log('old config', fusionConfig)
   let newConfig
-  do {
-    newConfig = utils.permutateConfigRandomly(fusionConfig)
-  } while (
-    await utils.configHasBeenTriedBefore(dbClient, newConfig, averageDuration)
-  )
+  // this configuration is worse than the previous
+  if (averageDuration > prevConfig.averageDuration) {
+    // roll back to previous configuration
+    console.log('Worse then prev, rolling back to', prevConfig.originalConfig)
+    newConfig = prevConfig.originalConfig
+  } else {
+    do {
+      newConfig = utils.permutateConfigRandomly(fusionConfig)
+    } while (
+      await utils.configHasBeenTriedBefore(dbClient, newConfig, averageDuration)
+    )
+  }
 
   console.log('Saving new config', newConfig)
 

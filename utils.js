@@ -87,11 +87,15 @@ const configHasBeenTriedBefore = async (
   console.log('cleaned config', cleanedConfig)
   const result = await collection.findOne({ fusionConfig: cleanedConfig })
 
+  console.log('Found', result)
+
   if (result) {
     if (result.error) {
       console.log('This configuration had an error', result)
       return true
     }
+
+    console.log(result.averageDuration, averageDuration)
 
     if (result.averageDuration > averageDuration) {
       console.log('config has been tried before', result)
@@ -132,40 +136,50 @@ const initMongoClient = async () => {
   return dbClient.connect()
 }
 
-const saveCurrentConfigToDbAndReturnAverageDuration = async (
-  mongoData,
+const saveCurrentConfigToDb = async (
   inputConfig,
-  dbClient
+  dbClient,
+  hasErrors,
+  averageDuration,
+  originalConfig
 ) => {
   console.log('saving current config and average time to db')
 
   // sort fusion config entries
   const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
+  console.log('INPUT CONFIG', inputConfig)
   const fusionConfig = fusionConfigCopy
     .map((entry) => entry.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
 
   const collection = dbClient.db('fusion').collection('configurations')
 
-  if (mongoData.find((entry) => !!entry.error)) {
+  if (hasErrors) {
     console.log('Execution failed at least once, discarding this configuration')
     await collection.insertOne({
       fusionConfig,
+      originalConfig,
       error: true,
       date: new Date(),
     })
     return
   }
-  const averageDuration =
-    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
-    mongoData.length
 
   await collection.insertOne({
     fusionConfig,
+    originalConfig,
     averageDuration,
     date: new Date(),
   })
-  return averageDuration
+}
+
+const configHadErrors = (mongoData) => mongoData.find((entry) => !!entry.error)
+
+const calculateAverageDuration = (mongoData) => {
+  return (
+    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
+    mongoData.length
+  )
 }
 
 const permutateConfigRandomly = (fusionConfig) => {
@@ -205,7 +219,9 @@ module.exports = {
   readData,
   sendDispatchEvent,
   initMongoClient,
-  saveCurrentConfigToDbAndReturnAverageDuration,
+  saveCurrentConfigToDb,
   permutateConfigRandomly,
   copyObject,
+  calculateAverageDuration,
+  configHadErrors,
 }
