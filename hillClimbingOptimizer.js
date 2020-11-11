@@ -12,6 +12,8 @@ module.exports.handler = async () => {
   const mongoData = await utils.readData(dbClient)
   const prevConfig = (await loadPrevConfig(dbClient)) || {}
 
+  console.log('prev config', prevConfig)
+
   const hasErrors = utils.configHadErrors(mongoData)
 
   const averageDuration = hasErrors
@@ -23,7 +25,7 @@ module.exports.handler = async () => {
     dbClient,
     hasErrors,
     averageDuration,
-    prevConfig.originalConfig
+    fusionConfig
   )
 
   if (

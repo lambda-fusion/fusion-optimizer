@@ -145,10 +145,9 @@ const saveCurrentConfigToDb = async (
 ) => {
   console.log('saving current config and average time to db')
 
-  // sort fusion config entries
-  const fusionConfigCopy = JSON.parse(JSON.stringify(inputConfig))
   console.log('INPUT CONFIG', inputConfig)
-  const fusionConfig = fusionConfigCopy
+  // sort fusion config entries
+  const fusionConfig = inputConfig
     .map((entry) => entry.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
 

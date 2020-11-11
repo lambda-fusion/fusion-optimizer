@@ -15,25 +15,30 @@ module.exports.handler = async (event) => {
 
   const dag = await loadDAG()
 
-  console.log('DAG loaded', dag)
+  const prevConfig = (await loadPrevConfig(dbClient)) || {}
 
-  const oldConfig = await loadPrevConfig(dbClient)
+  const hasErrors = utils.configHadErrors(mongoData)
 
-  const averageDuration = await utils.saveCurrentConfigToDbAndReturnAverageDuration(
-    mongoData,
+  const averageDuration = hasErrors
+    ? Number.MAX_SAFE_INTEGER
+    : await utils.calculateAverageDuration(mongoData)
+
+  await utils.saveCurrentConfigToDb(
     fusionConfig.map((deployment) => ({ lambdas: deployment.lambdas.sort() })),
-    dbClient
+    dbClient,
+    hasErrors,
+    averageDuration,
+    prevConfig.originalConfig
   )
 
   if (
-    oldConfig &&
-    !oldConfig.error &&
-    averageDuration < oldConfig.averageDuration
+    prevConfig &&
+    !prevConfig.error &&
+    averageDuration < prevConfig.averageDuration
   ) {
     console.log('deploying to prod')
     await utils.sendDispatchEvent('deploy', 'prod')
   }
-  console.log('current config', fusionConfig)
 
   const newConfig = await createNewConfig(
     fusionConfig,
@@ -189,7 +194,7 @@ const splitLambdas = async (fusionConfig, dag) => {
   throw new Error('No suitable config could be created')
 }
 
-//merge direct dddescendants
+//merge direct descendants
 const mergeLambdas = async (fusionConfig, dag, dbClient, averageDuration) => {
   console.log('MERGING')
   for (const i in fusionConfig) {
