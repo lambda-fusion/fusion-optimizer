@@ -106,7 +106,7 @@ const configHasBeenTriedBefore = async (
 }
 
 const readData = async (dbClient) => {
-  const collection = dbClient.db('fusion').collection('results')
+  const collection = dbClient.db(process.env.DB_NAME).collection('results')
 
   const last25Minutes = new Date(Date.now() - 1000 * 60 * 25)
   return collection.find({ starttime: { $gte: last25Minutes } }).toArray()

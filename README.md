@@ -6,6 +6,7 @@ Generates an optimized fusion configuration and triggers a [repository_dispatch]
 
 - An application hosted on github.com
 - Serverless CLI installed
+- a MongoDB instance
 
 ## Installation
 
@@ -19,7 +20,7 @@ npm install
 cp .env.sample .env
 ```
 
-and fill in the environment variables. By default a heuristics based optimizer is used. You can activate the hill-climbing algorithm my editing the `serverless.yml` file.
+and fill in the environment variables. By default a hill-climbing optimizer is used. You can activate the heuristics-based algorithm my editing the `serverless.yml` file.
 
 ## Deployment
 
