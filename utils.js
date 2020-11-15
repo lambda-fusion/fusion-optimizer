@@ -54,10 +54,22 @@ const getRandomInt = (max, duplicatesArray) => {
 }
 
 const saveFusionConfig = async (fusionConfig) => {
+  const bucket = process.env.CONFIG_BUCKET
+  const fusionConfigFileName = process.env.CONFIG_NAME
   const s3 = new AWS.S3()
+  console.log('Copy current file as backup to s3')
+  await s3
+    .copyObject({
+      Bucket: bucket,
+      CopySource: `${bucket}/${fusionConfigFileName}`,
+      Key: `${bucket}/config_old.json`,
+      ACL: 'public-read',
+    })
+    .promise()
+
   const params = {
-    Bucket: process.env.CONFIG_BUCKET,
-    Key: 'fusionConfiguration.json',
+    Bucket: bucket,
+    Key: fusionConfigFileName,
     Body: JSON.stringify(fusionConfig),
     ContentType: `application/json`,
     ACL: 'public-read',
@@ -176,7 +188,7 @@ const configHadErrors = (mongoData) => mongoData.find((entry) => !!entry.error)
 
 const calculateAverageDuration = (mongoData) => {
   return (
-    mongoData.reduce((prev, curr) => prev + parseFloat(curr.totalDuration), 0) /
+    mongoData.reduce((prev, curr) => prev + parseFloat(curr.runtime), 0) /
     mongoData.length
   )
 }
