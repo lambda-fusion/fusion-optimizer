@@ -62,7 +62,7 @@ const saveFusionConfig = async (fusionConfig) => {
     .copyObject({
       Bucket: bucket,
       CopySource: `${bucket}/${fusionConfigFileName}`,
-      Key: `${bucket}/config_old.json`,
+      Key: `config_old.json`,
       ACL: 'public-read',
     })
     .promise()
