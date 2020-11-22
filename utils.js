@@ -92,12 +92,18 @@ const configHasBeenTriedBefore = async (
   fusionConfig,
   averageDuration
 ) => {
-  const collection = dbClient.db('fusion').collection('configurations')
+  const configurations = dbClient.db('fusion').collection('configurations')
   const cleanedConfig = fusionConfig
     .map((deployment) => deployment.lambdas.sort((a, b) => a.localeCompare(b)))
     .sort((a, b) => a[0].localeCompare(b[0]))
   console.log('cleaned config', cleanedConfig)
-  const result = await collection.findOne({ fusionConfig: cleanedConfig })
+  const result = (
+    await configurations
+      .find({ fusionConfig: cleanedConfig })
+      .sort({ date: -1 })
+      .limit(1)
+      .toArray()
+  )[0]
 
   console.log('Found', result)
 
@@ -107,7 +113,9 @@ const configHasBeenTriedBefore = async (
       return true
     }
 
-    console.log(result.averageDuration, averageDuration)
+    console.log(
+      `old average duration: ${result.averageDuration}. Current average duration ${averageDuration}`
+    )
 
     if (result.averageDuration > averageDuration) {
       console.log('config has been tried before', result)

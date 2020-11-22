@@ -16,6 +16,7 @@ module.exports.handler = async (event) => {
   const dag = await loadDAG()
 
   const prevConfig = (await loadPrevConfig(dbClient)) || {}
+  console.log('prev config', prevConfig)
 
   const hasErrors = utils.configHadErrors(mongoData)
 
@@ -28,7 +29,7 @@ module.exports.handler = async (event) => {
     dbClient,
     hasErrors,
     averageDuration,
-    prevConfig.originalConfig
+    fusionConfig
   )
 
   if (
@@ -40,12 +41,22 @@ module.exports.handler = async (event) => {
     await utils.sendDispatchEvent('deploy', 'prod')
   }
 
-  const newConfig = await createNewConfig(
-    fusionConfig,
-    dag,
-    dbClient,
-    averageDuration
-  )
+  let newConfig
+  if (hasErrors && prevConfig.originalConfig) {
+    // roll back to previous configuration
+    console.log(
+      'Deployment had errors. Rolling back.',
+      prevConfig.originalConfig
+    )
+    newConfig = prevConfig.originalConfig
+  } else {
+    newConfig = await createNewDeploymentConfig(
+      fusionConfig,
+      dag,
+      dbClient,
+      averageDuration
+    )
+  }
 
   console.log('Saving new config', newConfig)
 
@@ -64,44 +75,6 @@ module.exports.handler = async (event) => {
       2
     ),
   }
-}
-
-// deployment is valid if either only has 1 lambda OR
-// lambdas have no connection OR
-// if includes related functions, then includes all functions inbetween
-const isValidConfig = (fusionConfig, dag) => {
-  return fusionConfig.every((config) => {
-    if (config.lambdas.length === 1) {
-      return true
-    }
-    return config.lambdas.every((lambda1) => {
-      for (const lambda2 of config.lambdas) {
-        if (lambda1 === lambda2) continue
-        const isDescendant = !!DFS(lambda1, lambda2, dag)
-        if (isDescendant) {
-          const parents = getParents(lambda2, dag)
-          const hasAtLeastOneParent = parents.every((parent) =>
-            config.lambdas.includes(parent)
-          )
-
-          if (!hasAtLeastOneParent) {
-            return false
-          }
-        }
-      }
-      return true
-    })
-  })
-}
-
-const getParents = (child, dag) => {
-  let parents = []
-  for (const [key, value] of Object.entries(dag)) {
-    if (value.includes(child)) {
-      parents.push(key)
-    }
-  }
-  return parents
 }
 
 const DFS = (source, target, dag, stack) => {
@@ -143,97 +116,64 @@ const loadDAG = async () => {
   return dag
 }
 
-const createNewConfig = (fusionConfig, dag, dbClient, averageDuration) => {
-  const randomIndex = getRandomInt(2)
-  if (randomIndex === 0) {
-    return mergeLambdas(fusionConfig, dag, dbClient, averageDuration)
-  } else {
-    return splitLambdas(fusionConfig, dag, dbClient, averageDuration)
-  }
-}
-
-const splitLambdas = async (fusionConfig, dag) => {
-  console.log('SPLITTING')
-  for (const config of fusionConfig) {
-    if (config.lambdas.length <= 1) {
-      continue
-    }
-
-    for (const i in config.lambdas) {
-      for (const j in config.lambdas) {
-        const fusionConfigCopy = utils.copyObject(fusionConfig)
-
-        const lambda1 = config.lambdas[i]
-        const lambda2 = config.lambdas[j]
-
-        const isRelated =
-          !!DFS(lambda1, lambda2, dag) || !!DFS(lambda2, lambda1, dag)
-
-        if (isRelated) {
-          console.log(`${lambda1} and ${lambda2} are related. Skip.`)
-          continue
-        }
-
-        const indexToExtract = utils.getRandomInt(config.lambdas.length)
-        const functionName = splittee.lambdas[indexToExtract]
-        fusionConfigCopy.push({ lambdas: [functionName] })
-        splittee.lambdas.splice(indexToExtract, 1)
-        if (
-          await utils.configHasBeenTriedBefore(
-            dbClient,
-            fusionConfigCopy,
-            averageDuration
-          )
-        ) {
-          continue
-        }
-        return fusionConfigCopy
-      }
-    }
-  }
-  throw new Error('No suitable config could be created')
-}
-
-//merge direct descendants
-const mergeLambdas = async (fusionConfig, dag, dbClient, averageDuration) => {
-  console.log('MERGING')
-  for (const i in fusionConfig) {
-    for (const j in fusionConfig) {
-      if (i === j) {
-        continue
-      }
+const createNewDeploymentConfig = async (
+  fusionConfig,
+  dag,
+  dbClient,
+  averageDuration
+) => {
+  console.log('create new config')
+  for (let i = 0; i < fusionConfig.length; i++) {
+    for (const lambda of fusionConfig[i].lambdas) {
       const fusionConfigCopy = utils.copyObject(fusionConfig)
-      const lambda1 = fusionConfig[i].lambdas[0]
-      const lambda2 = fusionConfig[j].lambdas[0]
+      const children = getChildIndexes(fusionConfig, dag[lambda], i)
+      console.log('current lambda', lambda, dag[lambda])
+      console.log('child indexes', children)
 
-      const isRelated =
-        !!DFS(lambda1, lambda2, dag) || !!DFS(lambda2, lambda1, dag)
-
-      if (!isRelated) {
-        console.log(`${lambda1} and ${lambda2} are not related. Skip.`)
+      // skip if lambda has no fusable children
+      if (children.length === 0) {
         continue
       }
 
-      fusionConfigCopy[i].lambdas = fusionConfigCopy[i].lambdas.concat(
-        fusionConfigCopy[j].lambdas
-      )
-      fusionConfigCopy.splice(j, 1)
-
-      const normalized = utils.normalizeEntries(fusionConfigCopy)
-
-      if (
-        await utils.configHasBeenTriedBefore(
-          dbClient,
-          normalized,
-          averageDuration
+      // add all children to current deployment unit
+      children.forEach((j) => {
+        fusionConfigCopy[i].lambdas = fusionConfigCopy[i].lambdas.concat(
+          fusionConfig[j].lambdas
         )
+      })
+
+      // remove all fused entries
+      const result = fusionConfigCopy.filter(
+        (_, index) => !children.includes(index)
+      )
+      console.log('merged config:', result)
+      if (
+        await utils.configHasBeenTriedBefore(dbClient, result, averageDuration)
       ) {
         continue
       }
-      return normalized
+      return utils.normalizeEntries(result)
     }
   }
   throw new Error('No suitable config could be created')
+}
+
+const getChildIndexes = (fusionConfig, children = [], currentIndex) => {
+  const indexes = []
+  for (const child of children) {
+    fusionConfig.forEach((_, index) => {
+      if (index === currentIndex) {
+        return
+      }
+      if (
+        fusionConfig[index].lambdas.includes(child) &&
+        !indexes.includes(index)
+      ) {
+        indexes.push(index)
+      }
+    })
+  }
+  return indexes
 }
 
 const loadPrevConfig = async (dbClient) => {

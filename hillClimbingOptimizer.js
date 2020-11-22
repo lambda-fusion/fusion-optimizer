@@ -41,7 +41,7 @@ module.exports.handler = async () => {
   // this configuration is worse than the previous
   if (averageDuration > prevConfig.averageDuration) {
     // roll back to previous configuration
-    console.log('Worse then prev, rolling back to', prevConfig.originalConfig)
+    console.log('Worse than prev, rolling back to', prevConfig.originalConfig)
     newConfig = prevConfig.originalConfig
   } else {
     do {
