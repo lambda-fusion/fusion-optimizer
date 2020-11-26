@@ -74,5 +74,5 @@ const loadPrevConfig = async (dbClient) => {
   return dbClient
     .db('fusion')
     .collection('configurations')
-    .findOne({}, { sort: { date: -1 } })
+    .findOne({ error: { $exists: false } }, { sort: { date: -1 } })
 }

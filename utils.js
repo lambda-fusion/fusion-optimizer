@@ -192,12 +192,13 @@ const saveCurrentConfigToDb = async (
   })
 }
 
-const configHadErrors = (mongoData) => mongoData.find((entry) => !!entry.error)
+const configHadErrors = (mongoData) => mongoData.some((entry) => !!entry.error)
 
 const calculateAverageDuration = (mongoData) => {
+  const filterErrors = mongoData.filter((entry) => !entry.error)
   return (
-    mongoData.reduce((prev, curr) => prev + parseFloat(curr.runtime), 0) /
-    mongoData.length
+    filterErrors.reduce((prev, curr) => prev + parseFloat(curr.runtime), 0) /
+    filterErrors.length
   )
 }
 

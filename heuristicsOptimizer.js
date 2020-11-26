@@ -19,6 +19,7 @@ module.exports.handler = async (event) => {
   console.log('prev config', prevConfig)
 
   const hasErrors = utils.configHadErrors(mongoData)
+  console.log('config has errors:', hasErrors)
 
   const averageDuration = hasErrors
     ? Number.MAX_SAFE_INTEGER
@@ -180,5 +181,5 @@ const loadPrevConfig = async (dbClient) => {
   return dbClient
     .db('fusion')
     .collection('configurations')
-    .findOne({}, { sort: { date: -1 } })
+    .findOne({ error: { $exists: false } }, { sort: { date: -1 } })
 }
